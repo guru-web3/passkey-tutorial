@@ -5,7 +5,6 @@ import {
   createKernelAccount,
   createKernelAccountClient,
   createZeroDevPaymasterClient,
-  verifyEIP6492Signature,
 } from "@zerodev/sdk";
 import {
   WebAuthnMode,
@@ -21,7 +20,6 @@ import {
   parseAbi,
   encodeFunctionData,
   zeroAddress,
-  hashMessage,
 } from "viem";
 import { sepolia } from "viem/chains";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -139,12 +137,9 @@ export default function Home() {
       },
     });
 
-    setIsKernelClientReady(true);
-    setAccountAddress(kernelAccount.address);
-
+    // sample user op
     await handleSendUserOp();
     
-
     console.log("performing recovery...");
     const userOpHash = await kernelClient.sendUserOperation({
       userOperation: {
@@ -160,108 +155,41 @@ export default function Home() {
     });
 
     console.log("recovery userOp hash:", userOpHash);
-    // await sleep(10000);
+    await sleep(10000);
 
     const bundlerClient = kernelClient.extend(
       bundlerActions(ENTRYPOINT_ADDRESS_V07)
     );
     await bundlerClient.waitForUserOperationReceipt({
       hash: userOpHash,
-      timeout: 100000,
     });
 
-    // console.log("recovery completed!");
+    console.log("recovery completed!");
 
-    // const newEcdsaValidator = await signerToEcdsaValidator(publicClient, {
-    //   signer: tempSigner,
-    //   entryPoint: ENTRYPOINT_ADDRESS_V07,
-    //   kernelVersion: KERNEL_V3_1,
-    // });
-
-    // const newAccount = await createKernelAccount(publicClient, {
-    //   deployedAccountAddress: kernelAccount.address,
-    //   entryPoint: ENTRYPOINT_ADDRESS_V07,
-    //   plugins: {
-    //     sudo: newEcdsaValidator,
-    //     action: getRecoveryAction(ENTRYPOINT_ADDRESS_V07),
-    //   },
-    //   kernelVersion: KERNEL_V3_1,
-    // });
-    // // const paymasterClient = createZeroDevPaymasterClient({
-    // //   chain: CHAIN,
-    // //   transport: http(BUNDLER_URL),
-    // //   entryPoint: ENTRYPOINT_ADDRESS_V07,
-    // // });
-    // const newKernelClient = createKernelAccountClient({
-    //   entryPoint: ENTRYPOINT_ADDRESS_V07,
-    //   account: newAccount,
-    //   chain: CHAIN,
-    //   bundlerTransport: http(BUNDLER_URL),
-    //   middleware: {
-    //     sponsorUserOperation: async ({ userOperation }) => {
-    //       const zeroDevPaymaster = await createZeroDevPaymasterClient({
-    //         chain: CHAIN,
-    //         transport: http(PAYMASTER_URL),
-    //         entryPoint: ENTRYPOINT_ADDRESS_V07,
-    //       });
-    //       return zeroDevPaymaster.sponsorUserOperation({
-    //         userOperation,
-    //         entryPoint: ENTRYPOINT_ADDRESS_V07,
-    //       });
-    //     },
-    //   },
-    // });
-
-    // console.log("sending userOp with new signer", newAccount.address);
-    // const temp = await newKernelClient.signMessage({ message: "hello" });
-    // console.log({ temp });
-    // const temp2 = await newAccount.signMessage({ message: "hello" });
-    // console.log({ temp2 });
-    // const userOpHash2 = await newKernelClient.sendUserOperation({
-    //   userOperation: {
-    //     callData: await newAccount.encodeCallData({
-    //       to: zeroAddress,
-    //       value: BigInt(0),
-    //       data: "0x",
-    //     }),
-    //   },
-    // });
-    // const callData = await newAccount.encodeCallData({
-    //   to: "0x0000000000000000000000000000000000000000",
-    //   value: BigInt(0),
-    //   data: "0x",
-    // });
-    // console.log({ callData });
-    // const userOpHash2 = await newKernelClient.sendTransaction({
-    //   to: "0x0000000000000000000000000000000000000000",
-    //   value: BigInt(0),
-    //   data: "0x",
-    // });
-    // console.log("userOp hash:", userOpHash2);
-
-    // await bundlerClient.waitForUserOperationReceipt({
-    //   hash: userOpHash2,
-    // });
-    // console.log("userOp completed!");
-
-  };
-
-  const createAccountAndClient2 = async (passkeyValidator: any) => {
-    kernelAccount = await createKernelAccount(publicClient, {
+    const newEcdsaValidator = await signerToEcdsaValidator(publicClient, {
+      signer: guardian,
       entryPoint: ENTRYPOINT_ADDRESS_V07,
-      plugins: {
-        sudo: passkeyValidator,
-      },
       kernelVersion: KERNEL_V3_1,
     });
 
-    console.log("Kernel account created: ", kernelAccount.address);
-
-    kernelClient = createKernelAccountClient({
-      account: kernelAccount,
+    const newAccount = await createKernelAccount(publicClient, {
+      deployedAccountAddress: kernelAccount.address,
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      plugins: {
+        sudo: newEcdsaValidator,
+      },
+      kernelVersion: KERNEL_V3_1,
+    });
+    // const paymasterClient = createZeroDevPaymasterClient({
+    //   chain: CHAIN,
+    //   transport: http(BUNDLER_URL),
+    //   entryPoint: ENTRYPOINT_ADDRESS_V07,
+    // });
+    const newKernelClient = createKernelAccountClient({
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      account: newAccount,
       chain: CHAIN,
       bundlerTransport: http(BUNDLER_URL),
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
       middleware: {
         sponsorUserOperation: async ({ userOperation }) => {
           const zeroDevPaymaster = await createZeroDevPaymasterClient({
@@ -276,6 +204,38 @@ export default function Home() {
         },
       },
     });
+
+    console.log("sending userOp with new signer", newAccount.address);
+    const temp = await newKernelClient.signMessage({message: "hello"});
+    console.log({temp});
+    const temp2 = await newAccount.signMessage({message: "hello"});
+    console.log({temp2});
+    // const userOpHash2 = await newKernelClient.sendUserOperation({
+    //   userOperation: {
+    //     callData: await newAccount.encodeCallData({
+    //       to: zeroAddress,
+    //       value: BigInt(0),
+    //       data: "0x",
+    //     }),
+    //   },
+    // });
+    const callData = await newAccount.encodeCallData({
+      to: "0x0000000000000000000000000000000000000000",
+      value: BigInt(0),
+      data: "0x"
+    });
+    console.log({callData});
+    const userOpHash2 = await newKernelClient.sendTransaction({
+      to: "0x0000000000000000000000000000000000000000",
+      value: BigInt(0),
+      data: "0x",
+    });
+    console.log("userOp hash:", userOpHash2);
+
+    await bundlerClient.waitForUserOperationReceipt({
+      hash: userOpHash2,
+    });
+    console.log("userOp completed!");
 
     setIsKernelClientReady(true);
     setAccountAddress(kernelAccount.address);
