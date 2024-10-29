@@ -142,7 +142,7 @@ export default function Home() {
     setIsKernelClientReady(true);
     setAccountAddress(kernelAccount.address);
 
-    await handleSendUserOp();
+    // await handleSendUserOp();
     
 
     console.log("performing recovery...");
@@ -158,8 +158,8 @@ export default function Home() {
         }),
       },
     });
-
     console.log("recovery userOp hash:", userOpHash);
+
     // await sleep(10000);
 
     const bundlerClient = kernelClient.extend(
@@ -169,6 +169,7 @@ export default function Home() {
       hash: userOpHash,
       timeout: 100000,
     });
+    console.log("recovery userOp hash:", userOpHash);
 
     // console.log("recovery completed!");
 
@@ -285,8 +286,9 @@ export default function Home() {
   const handleRegister = async () => {
     setIsRegistering(true);
 
+    const updatedUserName = username || "Web3pay" + " - " + new Date().toISOString();
     const webAuthnKey = await toWebAuthnKey({
-      passkeyName: username,
+      passkeyName: updatedUserName,
       passkeyServerUrl: PASSKEY_SERVER_URL,
       mode: WebAuthnMode.Register,
     });
@@ -305,9 +307,9 @@ export default function Home() {
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
-
+    const updatedUserName = username || "Web3pay" + " - " + new Date().toISOString();
     const webAuthnKey = await toWebAuthnKey({
-      passkeyName: username,
+      passkeyName: updatedUserName,
       passkeyServerUrl: PASSKEY_SERVER_URL,
       mode: WebAuthnMode.Login,
     });
