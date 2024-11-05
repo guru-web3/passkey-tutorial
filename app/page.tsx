@@ -24,6 +24,8 @@ import {
   encodeFunctionData,
   zeroAddress,
   hashMessage,
+  Address,
+  Hex,
 } from "viem";
 import { sepolia } from "viem/chains";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -81,6 +83,9 @@ export default function Home() {
   const createAccountAndClient = async (
     passkeyValidator: KernelValidator<any, "WebAuthnValidator"> & {
       getSerializedData: () => string;
+    },
+    dummyPasskeyValidator: KernelValidator<any, "WebAuthnValidator"> & {
+      getSerializedData: () => string;
     }
   ) => {
     // guardian code
@@ -129,10 +134,6 @@ export default function Home() {
     setIsKernelClientReady(true);
     setAccountAddress(kernelAccount.address);
     
-    
-    // console.log("Sending Userop: ", kernelAccount.address);
-    // await handleSendUserOp(kernelEnableRegularPluginClient, kernelEnableRegularPluginAccount);
-    // console.log("User Op Completed");
 
     // // different chain recovery 
     // const recoveryAccount = await createKernelAccount(publicClient, {
@@ -168,10 +169,46 @@ export default function Home() {
     // });
     
     // console.log(recoveryAccount.kernelPluginManager.signUserOperationWithActiveValidator());
+    dummyPasskeyValidator.getEnableData = passkeyValidator.getEnableData;
+    const dummySudo = {
+      ...dummyPasskeyValidator,
+      ...{
+          address: passkeyValidator.address,
+          // getIdentifier: ecdsaValidator.getIdentifier,
+          // getEnableData: ecdsaValidator.getEnableData,
+          getDummySignature: async (userOperation: any, pluginEnableSignature: any) => {
+              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+            },
+          // getEnableData: async (address) => {
+          //     return ecdsaValidator.address;
+          // },
+          // getEnableData: async () => {
+          //     return ecdsaValidator.address;
+          // },
+          // getNonceKey: dummyValidator.getNonceKey,
+          // nonceManager: dummyValidator.nonceManager,
+
+          sign: async () => {
+              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+          },
+          signMessage : async () => {
+              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+          },
+          signTransaction : async () => {
+              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+          },
+          signTypedData : async () => {
+              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+          },
+          signUserOperation : async () => {
+              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+          },
+      },
+  };
     const kernelEnableRegularPluginAccount = await createKernelAccount(publicClient, {
       entryPoint: ENTRYPOINT_ADDRESS_V07,
       plugins: {
-        sudo: passkeyValidator,
+        sudo: dummySudo,
         regular: guardianValidator,
         action: getRecoveryAction(ENTRYPOINT_ADDRESS_V07),
         pluginEnableSignature: signature,
@@ -215,6 +252,10 @@ export default function Home() {
       },
     });
 
+    console.log("Sending Userop: ", kernelAccount.address);
+    await handleSendUserOp(kernelEnableRegularPluginClient, kernelEnableRegularPluginAccount);
+    console.log("User Op Completed");
+
     console.log("performing recovery...", kernelEnableRegularPluginClient.account.address);
     const userOpHash = await kernelClientWithoutAccount.sendUserOperation({
       account: kernelEnableRegularPluginAccount,
@@ -251,8 +292,14 @@ export default function Home() {
     setIsRegistering(true);
 
     const updatedUserName = username || "Web3pay" + " - " + new Date().toISOString();
+    const updatedUserName2 = username || "Web3pay dummy" + " - " + new Date().toISOString();
     const webAuthnKey = await toWebAuthnKey({
       passkeyName: updatedUserName,
+      passkeyServerUrl: PASSKEY_SERVER_URL,
+      mode: WebAuthnMode.Register,
+    });
+    const webAuthnKey2 = await toWebAuthnKey({
+      passkeyName: updatedUserName2,
       passkeyServerUrl: PASSKEY_SERVER_URL,
       mode: WebAuthnMode.Register,
     });
@@ -262,8 +309,13 @@ export default function Home() {
       entryPoint: ENTRYPOINT_ADDRESS_V07,
       kernelVersion: KERNEL_V3_1,
     });
+    const dummyPasskeyValidator = await toPasskeyValidator(publicClient, {
+      webAuthnKey: webAuthnKey2,
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      kernelVersion: KERNEL_V3_1,
+    });
 
-    await createAccountAndClient(passkeyValidator);
+    await createAccountAndClient(passkeyValidator, dummyPasskeyValidator);
 
     setIsRegistering(false);
     window.alert("Register done.  Try sending UserOps.");
@@ -284,7 +336,7 @@ export default function Home() {
       kernelVersion: KERNEL_V3_1,
     });
 
-    await createAccountAndClient(passkeyValidator);
+    // await createAccountAndClient(passkeyValidator);
 
     setIsLoggingIn(false);
     window.alert("Login done.  Try sending UserOps.");
