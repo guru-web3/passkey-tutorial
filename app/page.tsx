@@ -37,6 +37,7 @@ import {
   createWeightedECDSAValidator,
   getRecoveryAction,
 } from "@zerodev/weighted-ecdsa-validator";
+import { KernelAccountAbi } from "./utils";
 
 export const ZERODEV_PROJECT_ID_SEPOLIA =
   "ddf3ddac-ac6e-492c-8e58-214c7e9f0e01";
@@ -80,201 +81,29 @@ export default function Home() {
   const [userOpHash, setUserOpHash] = useState("");
   const [userOpStatus, setUserOpStatus] = useState("");
 
-  const createAccountAndClient = async (
-    passkeyValidator: KernelValidator<any, "WebAuthnValidator"> & {
-      getSerializedData: () => string;
-    },
-    dummyPasskeyValidator: KernelValidator<any, "WebAuthnValidator"> & {
-      getSerializedData: () => string;
-    }
-  ) => {
-    // guardian code
-    const guardian = privateKeyToAccount(PRIVATE_KEY);
-    const tempSigner = privateKeyToAccount(generatePrivateKey());
+  const contractAddress = "0x34bE7f35132E97915633BC1fc020364EA5134863";
+  const contractABI = parseAbi([
+    "function mint(address _to) public",
+    "function balanceOf(address owner) external view returns (uint256 balance)",
+  ]);
 
-    const guardianValidator = await signerToEcdsaValidator(publicClient, {
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-      signer: guardian,
-      kernelVersion: KERNEL_V3_1,
-    });
-    // regular code
-    const kernelAccount = await createKernelAccount(publicClient, {
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-      plugins: {
-        sudo: passkeyValidator,
-        regular: guardianValidator,
-        action: getRecoveryAction(ENTRYPOINT_ADDRESS_V07),
-      },
-      kernelVersion: KERNEL_V3_1,
-    });
+  // Function to be called when "Login" is clicked
+  const handleSendUserOp = async (kernelAccount: any, kernelClient: any) => {
+    setIsSendingUserOp(true);
+    setUserOpStatus("Sending UserOp...");
 
-    const kernelClient = createKernelAccountClient({
+    const userOpHash = await kernelClient.sendUserOperation({
       account: kernelAccount,
-      chain: CHAIN,
-      bundlerTransport: http(BUNDLER_URL),
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-      middleware: {
-        sponsorUserOperation: async ({ userOperation }) => {
-          const zeroDevPaymaster = await createZeroDevPaymasterClient({
-            chain: CHAIN,
-            transport: http(PAYMASTER_URL),
-            entryPoint: ENTRYPOINT_ADDRESS_V07,
-          });
-          return zeroDevPaymaster.sponsorUserOperation({
-            userOperation,
-            entryPoint: ENTRYPOINT_ADDRESS_V07,
-          });
-        },
-      },
-    });
-    console.log("Kernel account created: ", kernelAccount.address);
-    const signature = await passkeyValidator.signTypedData(await kernelAccount.kernelPluginManager.getPluginsEnableTypedData(kernelAccount.address));
-
-
-    setIsKernelClientReady(true);
-    setAccountAddress(kernelAccount.address);
-    
-
-    // // different chain recovery 
-    // const recoveryAccount = await createKernelAccount(publicClient, {
-    //   entryPoint: ENTRYPOINT_ADDRESS_V07,
-    //   plugins: {
-    //     regular: guardianValidator,
-    //     action: getRecoveryAction(ENTRYPOINT_ADDRESS_V07),
-    //   },
-    //   deployedAccountAddress: kernelAccount.address,
-    //   kernelVersion: KERNEL_V3_1,
-    // });
-
-    // console.log("Kernel account created: ", kernelAccount.address);
-
-    // const recoveryClient = createKernelAccountClient({
-    //   account: recoveryAccount,
-    //   chain: CHAIN,
-    //   bundlerTransport: http(BUNDLER_URL),
-    //   entryPoint: ENTRYPOINT_ADDRESS_V07,
-    //   middleware: {
-    //     sponsorUserOperation: async ({ userOperation }) => {
-    //       const zeroDevPaymaster = await createZeroDevPaymasterClient({
-    //         chain: CHAIN,
-    //         transport: http(PAYMASTER_URL),
-    //         entryPoint: ENTRYPOINT_ADDRESS_V07,
-    //       });
-    //       return zeroDevPaymaster.sponsorUserOperation({
-    //         userOperation,
-    //         entryPoint: ENTRYPOINT_ADDRESS_V07,
-    //       });
-    //     },
-    //   },
-    // });
-    
-    // console.log(recoveryAccount.kernelPluginManager.signUserOperationWithActiveValidator());
-    dummyPasskeyValidator.getEnableData = passkeyValidator.getEnableData;
-    const dummySudo = {
-      ...dummyPasskeyValidator,
-      ...{
-          address: passkeyValidator.address,
-          // getIdentifier: ecdsaValidator.getIdentifier,
-          // getEnableData: ecdsaValidator.getEnableData,
-          getDummySignature: async (userOperation: any, pluginEnableSignature: any) => {
-              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
-            },
-          // getEnableData: async (address) => {
-          //     return ecdsaValidator.address;
-          // },
-          // getEnableData: async () => {
-          //     return ecdsaValidator.address;
-          // },
-          // getNonceKey: dummyValidator.getNonceKey,
-          // nonceManager: dummyValidator.nonceManager,
-
-          sign: async () => {
-              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
-          },
-          signMessage : async () => {
-              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
-          },
-          signTransaction : async () => {
-              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
-          },
-          signTypedData : async () => {
-              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
-          },
-          signUserOperation : async () => {
-              return Promise.resolve("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
-          },
-      },
-  };
-    const kernelEnableRegularPluginAccount = await createKernelAccount(publicClient, {
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-      plugins: {
-        sudo: dummySudo,
-        regular: guardianValidator,
-        action: getRecoveryAction(ENTRYPOINT_ADDRESS_V07),
-        pluginEnableSignature: signature,
-      },
-      deployedAccountAddress: kernelAccount.address,
-      kernelVersion: KERNEL_V3_1,
-    });
-
-    const kernelEnableRegularPluginClient = createKernelAccountClient({
-      account: kernelEnableRegularPluginAccount,
-      chain: CHAIN,
-      bundlerTransport: http(BUNDLER_URL),
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-      middleware: {
-        sponsorUserOperation: async ({ userOperation }) => {
-          const zeroDevPaymaster = await createZeroDevPaymasterClient({
-            chain: CHAIN,
-            transport: http(PAYMASTER_URL),
-            entryPoint: ENTRYPOINT_ADDRESS_V07,
-          });
-          return zeroDevPaymaster.sponsorUserOperation({
-            userOperation,
-            entryPoint: ENTRYPOINT_ADDRESS_V07,
-          });
-        },
-      },
-    });
-    
-    const paymasterClient = createZeroDevPaymasterClient({
-      chain: sepolia,
-      transport: http(PAYMASTER_URL),
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-    });
-  
-    const kernelClientWithoutAccount = createKernelAccountClient({
-      chain: CHAIN,
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-      bundlerTransport: http(BUNDLER_URL),
-      middleware: {
-        sponsorUserOperation: paymasterClient.sponsorUserOperation,
-      },
-    });
-
-    console.log("Sending Userop: ", kernelAccount.address);
-    await handleSendUserOp(kernelEnableRegularPluginClient, kernelEnableRegularPluginAccount);
-    console.log("User Op Completed");
-
-    console.log("performing recovery...", kernelEnableRegularPluginClient.account.address);
-    const userOpHash = await kernelClientWithoutAccount.sendUserOperation({
-      account: kernelEnableRegularPluginAccount,
       userOperation: {
-        callData: encodeFunctionData({
-          abi: parseAbi([recoveryExecutorFunction]),
-          functionName: "doRecovery",
-          args: [
-            getValidatorAddress(ENTRYPOINT_ADDRESS_V07, KERNEL_V3_1),
-            // "0xbA45a2BFb8De3D24cA9D7F1B551E14dFF5d690Fd",
-            tempSigner.address,
-          ],
+        callData: await kernelAccount.encodeCallData({
+          to: zeroAddress,
+          value: BigInt(0),
+          data: "0x",
         }),
       },
     });
-  
-    console.log("recovery userOp hash:", userOpHash);
 
-    // await sleep(10000);
+    setUserOpHash(userOpHash);
 
     const bundlerClient = kernelClient.extend(
       bundlerActions(ENTRYPOINT_ADDRESS_V07)
@@ -283,70 +112,15 @@ export default function Home() {
       hash: userOpHash,
       timeout: 100000,
     });
-    console.log("recovery userOp hash:", userOpHash);
 
+    // Update the message based on the count of UserOps
+    const userOpMessage = `UserOp completed. <a href="https://jiffyscan.xyz/userOpHash/${userOpHash}?network=mumbai" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700">Click here to view.</a>`;
+
+    setUserOpStatus(userOpMessage);
+    setIsSendingUserOp(false);
   };
 
-  // Function to be called when "Register" is clicked
-  const handleRegister = async () => {
-    setIsRegistering(true);
-
-    const updatedUserName = username || "Web3pay" + " - " + new Date().toISOString();
-    const updatedUserName2 = username || "Web3pay dummy" + " - " + new Date().toISOString();
-    const webAuthnKey = await toWebAuthnKey({
-      passkeyName: updatedUserName,
-      passkeyServerUrl: PASSKEY_SERVER_URL,
-      mode: WebAuthnMode.Register,
-    });
-    const webAuthnKey2 = await toWebAuthnKey({
-      passkeyName: updatedUserName2,
-      passkeyServerUrl: PASSKEY_SERVER_URL,
-      mode: WebAuthnMode.Register,
-    });
-
-    const passkeyValidator = await toPasskeyValidator(publicClient, {
-      webAuthnKey,
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-      kernelVersion: KERNEL_V3_1,
-    });
-    const dummyPasskeyValidator = await toPasskeyValidator(publicClient, {
-      webAuthnKey: webAuthnKey2,
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-      kernelVersion: KERNEL_V3_1,
-    });
-
-    await createAccountAndClient(passkeyValidator, dummyPasskeyValidator);
-
-    setIsRegistering(false);
-    window.alert("Register done.  Try sending UserOps.");
-  };
-
-  const handleLogin = async (kernelClient: any) => {
-    setIsLoggingIn(true);
-    const updatedUserName = username || "Web3pay" + " - " + new Date().toISOString();
-    const webAuthnKey = await toWebAuthnKey({
-      passkeyName: updatedUserName,
-      passkeyServerUrl: PASSKEY_SERVER_URL,
-      mode: WebAuthnMode.Login,
-    });
-
-    const passkeyValidator = await toPasskeyValidator(publicClient, {
-      webAuthnKey,
-      entryPoint: ENTRYPOINT_ADDRESS_V07,
-      kernelVersion: KERNEL_V3_1,
-    });
-
-    // await createAccountAndClient(passkeyValidator);
-
-    setIsLoggingIn(false);
-    window.alert("Login done.  Try sending UserOps.");
-  };
-
-  // Function to be called when "Login" is clicked
-  const handleSendUserOp = async (
-    kernelClient: any,
-    kernelAccount: any,
-  ) => {
+  const handleMint = async (kernelAccount: any, kernelClient: any) => {
     setIsSendingUserOp(true);
     setUserOpStatus("Sending UserOp...");
 
@@ -376,10 +150,304 @@ export default function Home() {
     });
 
     // Update the message based on the count of UserOps
-    const userOpMessage = `UserOp completed. <a href="https://jiffyscan.xyz/userOpHash/${userOpHash}?network=mumbai" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700">Click here to view.</a>`;
+    const userOpMessage = `Mint completed. <a href="https://jiffyscan.xyz/userOpHash/${userOpHash}?network=mumbai" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700">Click here to view.</a>`;
 
     setUserOpStatus(userOpMessage);
     setIsSendingUserOp(false);
+  };
+
+  const handleRecovery = async (
+    kernelAccount: any,
+    kernelClient: any,
+    newSignerAddress: Hex
+  ) => {
+    setIsSendingUserOp(true);
+    setUserOpStatus("Sending UserOp...");
+
+    const userOpHash = await kernelClient.sendUserOperation({
+      account: kernelAccount,
+      userOperation: {
+        callData: await kernelAccount.encodeCallData([
+          {
+            to: "0x845ADb2C711129d4f3966735eD98a9F09fC4cE57",
+            value: BigInt(0),
+            data: encodeFunctionData({
+              abi: KernelAccountAbi,
+              functionName: "onUninstall",
+              args: ["0x845ADb2C711129d4f3966735eD98a9F09fC4cE57"],
+            }),
+          },
+          {
+            to: "0x845ADb2C711129d4f3966735eD98a9F09fC4cE57",
+            value: BigInt(0),
+            data: encodeFunctionData({
+              abi: KernelAccountAbi,
+              functionName: "onInstall",
+              args: [newSignerAddress],
+            }),
+          },
+        ]),
+      },
+    });
+    setUserOpHash(userOpHash);
+
+    const bundlerClient = kernelClient.extend(
+      bundlerActions(ENTRYPOINT_ADDRESS_V07)
+    );
+    await bundlerClient.waitForUserOperationReceipt({
+      hash: userOpHash,
+      timeout: 100000,
+    });
+
+    // Update the message based on the count of UserOps
+    const userOpMessage = `Recovery completed. <a href="https://jiffyscan.xyz/userOpHash/${userOpHash}?network=mumbai" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700">Click here to view.</a>`;
+
+    setUserOpStatus(userOpMessage);
+    setIsSendingUserOp(false);
+  };
+
+  const createAccountAndClient = async (
+    passkeyValidator: KernelValidator<any, "WebAuthnValidator"> & {
+      getSerializedData: () => string;
+    },
+  ) => {
+    // guardian code
+    const guardian = privateKeyToAccount(generatePrivateKey());
+    const recovery = privateKeyToAccount(generatePrivateKey());
+
+    const guardianValidator = await signerToEcdsaValidator(publicClient, {
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      signer: guardian,
+      kernelVersion: KERNEL_V3_1,
+    });
+
+    const kernelAccount = await createKernelAccount(
+      publicClient,
+      {
+        entryPoint: ENTRYPOINT_ADDRESS_V07,
+        plugins: {
+          sudo: passkeyValidator,
+          regular: guardianValidator,
+        },
+        kernelVersion: KERNEL_V3_1,
+      }
+    );
+    // regular code
+    const signature = await passkeyValidator.signTypedData(
+      await kernelAccount.kernelPluginManager.getPluginsEnableTypedData(
+        kernelAccount.address
+      )
+    );
+
+    const kernelEnableRegularPluginAccount = await createKernelAccount(
+      publicClient,
+      {
+        entryPoint: ENTRYPOINT_ADDRESS_V07,
+        plugins: {
+          sudo: passkeyValidator,
+          regular: guardianValidator,
+          pluginEnableSignature: signature,
+        },
+        kernelVersion: KERNEL_V3_1,
+      }
+    );
+
+    setIsKernelClientReady(true);
+    setAccountAddress(kernelEnableRegularPluginAccount.address);
+
+    console.log("Kernel account created: ", kernelEnableRegularPluginAccount.address);
+
+    const kernelEnableRegularPluginClient = createKernelAccountClient({
+      account: kernelEnableRegularPluginAccount,
+      chain: CHAIN,
+      bundlerTransport: http(BUNDLER_URL),
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      middleware: {
+        sponsorUserOperation: async ({ userOperation }) => {
+          const zeroDevPaymaster = await createZeroDevPaymasterClient({
+            chain: CHAIN,
+            transport: http(PAYMASTER_URL),
+            entryPoint: ENTRYPOINT_ADDRESS_V07,
+          });
+          return zeroDevPaymaster.sponsorUserOperation({
+            userOperation,
+            entryPoint: ENTRYPOINT_ADDRESS_V07,
+          });
+        },
+      },
+    });
+
+    console.log("enabling regular validator");
+    // send zerox transaction
+    await handleSendUserOp(
+      kernelEnableRegularPluginAccount,
+      kernelEnableRegularPluginClient
+    );
+    console.log("done enabling regular validator");
+
+    const regularAccount =  await createKernelAccount(
+      publicClient,
+      {
+        entryPoint: ENTRYPOINT_ADDRESS_V07,
+        plugins: {
+          regular: guardianValidator,
+          pluginEnableSignature: signature,
+        },
+        deployedAccountAddress: kernelEnableRegularPluginAccount.address,
+        kernelVersion: KERNEL_V3_1,
+      }
+    );
+    const regularAccountClient = createKernelAccountClient({
+      account: regularAccount,
+      chain: CHAIN,
+      bundlerTransport: http(BUNDLER_URL),
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      middleware: {
+        sponsorUserOperation: async ({ userOperation }) => {
+          const zeroDevPaymaster = await createZeroDevPaymasterClient({
+            chain: CHAIN,
+            transport: http(PAYMASTER_URL),
+            entryPoint: ENTRYPOINT_ADDRESS_V07,
+          });
+          return zeroDevPaymaster.sponsorUserOperation({
+            userOperation,
+            entryPoint: ENTRYPOINT_ADDRESS_V07,
+          });
+        },
+      },
+    });
+
+    // const updatedUserName2 =
+    //   username || "Web3pay recovery" + " - " + new Date().toISOString();
+    // const webAuthnKey2 = await toWebAuthnKey({
+    //   passkeyName: updatedUserName2,
+    //   passkeyServerUrl: PASSKEY_SERVER_URL,
+    //   mode: WebAuthnMode.Register,
+    // });
+
+    // const recoveryValidator = await toPasskeyValidator(publicClient, {
+    //   webAuthnKey: webAuthnKey2,
+    //   entryPoint: ENTRYPOINT_ADDRESS_V07,
+    //   kernelVersion: KERNEL_V3_1,
+    // });
+    
+    console.log("passkey address", recovery.address);
+    console.log("recovery using regular validator");
+    // send recovery uninstall and install call
+    await handleRecovery(
+      regularAccount,
+      regularAccountClient,
+      recovery.address,
+    );
+    console.log("done recovery regular validator");
+
+    const recoveryValidator = await signerToEcdsaValidator(publicClient, {
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      signer: recovery,
+      kernelVersion: KERNEL_V3_1,
+    });
+
+    const recoveryAccount = await createKernelAccount(
+      publicClient,
+      {
+        entryPoint: ENTRYPOINT_ADDRESS_V07,
+        plugins: {
+          regular: recoveryValidator,
+        },
+        deployedAccountAddress: kernelEnableRegularPluginAccount.address,
+        kernelVersion: KERNEL_V3_1,
+      }
+    );
+    const recoveryAccountClient = createKernelAccountClient({
+      account: recoveryAccount,
+      chain: CHAIN,
+      bundlerTransport: http(BUNDLER_URL),
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      middleware: {
+        sponsorUserOperation: async ({ userOperation }) => {
+          const zeroDevPaymaster = await createZeroDevPaymasterClient({
+            chain: CHAIN,
+            transport: http(PAYMASTER_URL),
+            entryPoint: ENTRYPOINT_ADDRESS_V07,
+          });
+          return zeroDevPaymaster.sponsorUserOperation({
+            userOperation,
+            entryPoint: ENTRYPOINT_ADDRESS_V07,
+          });
+        },
+      },
+    });
+
+    console.log("minting using recovery passkey validator");
+    // send mint transaction
+    await handleMint(recoveryAccount, recoveryAccountClient);
+    // await handleSendUserOp(recoveryAccount, recoveryAccountClient);
+    console.log("minted using recovery passkey validator");
+  };
+
+  // Function to be called when "Register" is clicked
+  const handleRegister = async () => {
+    setIsRegistering(true);
+
+    const updatedUserName =
+      username || "Web3pay" + " - " + new Date().toISOString();
+    const webAuthnKey = await toWebAuthnKey({
+      passkeyName: updatedUserName,
+      passkeyServerUrl: PASSKEY_SERVER_URL,
+      mode: WebAuthnMode.Register,
+    });
+
+    const passkeyValidator = await toPasskeyValidator(publicClient, {
+      webAuthnKey,
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      kernelVersion: KERNEL_V3_1,
+    });
+
+    // const webAuthnKey2 = await toWebAuthnKey({
+    //   passkeyName: updatedUserName2,
+    //   passkeyServerUrl: PASSKEY_SERVER_URL,
+    //   mode: WebAuthnMode.Register,
+    // });
+
+    // const recoveryValidator = await toPasskeyValidator(publicClient, {
+    //   webAuthnKey: webAuthnKey2,
+    //   entryPoint: ENTRYPOINT_ADDRESS_V07,
+    //   kernelVersion: KERNEL_V3_1,
+    // });
+    const newSigner = privateKeyToAccount(generatePrivateKey());
+
+    const recoveryValidator = await signerToEcdsaValidator(publicClient, {
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      signer: newSigner,
+      kernelVersion: KERNEL_V3_1,
+    });
+
+    await createAccountAndClient(passkeyValidator);
+
+    setIsRegistering(false);
+    window.alert("Register done.  Try sending UserOps.");
+  };
+
+  const handleLogin = async (kernelClient: any) => {
+    setIsLoggingIn(true);
+    const updatedUserName =
+      username || "Web3pay" + " - " + new Date().toISOString();
+    const webAuthnKey = await toWebAuthnKey({
+      passkeyName: updatedUserName,
+      passkeyServerUrl: PASSKEY_SERVER_URL,
+      mode: WebAuthnMode.Login,
+    });
+
+    const passkeyValidator = await toPasskeyValidator(publicClient, {
+      webAuthnKey,
+      entryPoint: ENTRYPOINT_ADDRESS_V07,
+      kernelVersion: KERNEL_V3_1,
+    });
+
+    // await createAccountAndClient(passkeyValidator);
+
+    setIsLoggingIn(false);
+    window.alert("Login done.  Try sending UserOps.");
   };
 
   useEffect(() => {
